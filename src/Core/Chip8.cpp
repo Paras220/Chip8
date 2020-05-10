@@ -57,4 +57,6 @@ bool Chip8::LoadROM(const char* filename)
 
 void Chip8::Cycle()
 {
+	opcode = (memory[pc] << 8) | memory[pc+1];
+	pc += 2;
 }
