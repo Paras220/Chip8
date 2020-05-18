@@ -11,4 +11,7 @@ int main(int argc, char *argv[])
 		std::cout << "Could not load the ROM. Exiting program";
 		return -1;
 	}
+
+	//todo test x++ vs ++x array
+	// implement at least a few op codes
 }
