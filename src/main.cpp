@@ -12,6 +12,5 @@ int main(int argc, char *argv[])
 		return -1;
 	}
 
-	//todo test x++ vs ++x array
-	// implement at least a few op codes
+	c8.Cycle();
 }
