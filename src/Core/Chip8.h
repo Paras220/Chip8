@@ -10,14 +10,23 @@
 
 const int PC_START = 0x200;
 
+
 class Chip8 {
+
+enum class Key : uint8_t {
+    NotPressed,
+    Pressed 
+};
+
 public:
     Chip8();
 	void Cycle();
 	bool LoadROM(const char* filename);
 
     std::array<uint8_t, 64 * 32> display = {};
+    std::array<Key, 16> keypad = {};
 
+    bool drawFlag;
 private:
     uint16_t pc;
     uint16_t opcode;
