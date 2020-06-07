@@ -5,7 +5,6 @@
 
 
 // TODO
-// Opcodes
 // SDL2 output
 
 const int PC_START = 0x200;

@@ -51,7 +51,7 @@ Chip8::Chip8()
 	0xF0, 0x80, 0xF0, 0x80, 0xF0, //E
 	0xF0, 0x80, 0xF0, 0x80, 0x80  //F
 	};
-	std::move(fontset.begin(), fontset.end(), memory.begin());
+	std::copy(fontset.begin(), fontset.end(), memory.begin());
 }
 
 bool Chip8::LoadROM(const char* filename)
@@ -72,8 +72,7 @@ bool Chip8::LoadROM(const char* filename)
 	return loaded;
 }
 
-// todo change case 8000 to ternary
-// add pc += 2 to opcodes
+
 void Chip8::Cycle()
 {
 	opcode = (memory[pc] << 8) | memory[pc + 1];
