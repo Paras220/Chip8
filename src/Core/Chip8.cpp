@@ -1,11 +1,12 @@
-#include <algorithm> 
+#include <algorithm>
 #include <filesystem>
 #include <fstream>
 #include <iostream>
 #include <random>
 #include <string>
 
-#include "Chip8.h"
+#include "../../include/Core/Chip8.h"
+
 
 // DEBUG STATEMENTS
 #include <iomanip>
@@ -16,23 +17,26 @@ constexpr auto PRINT_OPCODE(T code) { std::cout << "opcode: 0x" << std::hex << s
 #define NNN (opcode & 0x0FFF)
 #define NN (opcode & 0x00FF)
 #define N (opcode & 0x000F)
-#define X (opcode & 0x0F00 >> 8)
-#define Y (opcode & 0x00F0 >> 4)
+// >> operator takes precedence over & so use brackets
+#define X ((opcode & 0x0F00) >> 8)
+#define Y ((opcode & 0x00F0) >> 4)
+
 
 Chip8::Chip8()
 {
 	pc = PC_START;
 	opcode = 0;
-	registerI = 0;
+	index_reg = 0;
 
-	drawFlag = false;
+	draw_flag = false;
 
 	sp = 0;
-	delayTimer, soundTimer = 60;
+	delay_timer, sound_timer = 60;
 
 	keypad.fill(Key::NotPressed);
+	display.fill(0);
 
-	// Load the fontset at location 0x000 of memory
+	// Load the fontset at location 0x000 in memory
 	std::array<uint8_t, 80> fontset = {
 	0xF0, 0x90, 0x90, 0x90, 0xF0, //0
 	0x20, 0x60, 0x20, 0x20, 0x70, //1
@@ -54,7 +58,8 @@ Chip8::Chip8()
 	std::copy(fontset.begin(), fontset.end(), memory.begin());
 }
 
-bool Chip8::LoadROM(const char* filename)
+// Initialise and load ROM into memory
+bool Chip8::load_rom(const char* filename)
 {
 	bool loaded = true;
 
@@ -73,9 +78,10 @@ bool Chip8::LoadROM(const char* filename)
 }
 
 
-void Chip8::Cycle()
+void Chip8::cycle()
 {
 	opcode = (memory[pc] << 8) | memory[pc + 1];
+	PRINT_OPCODE(opcode);
 
 	switch (opcode & 0xF000)
 	{
@@ -85,6 +91,7 @@ void Chip8::Cycle()
 		case 0x00E0:
 			display.fill(0);
 			pc += 2;
+			draw_flag = true;
 			break;
 
 		case 0x00EE:
@@ -93,10 +100,11 @@ void Chip8::Cycle()
 			pc += 2;
 			break;
 
+			// default case in case there was an error in finding the opcode
 		default:
 			std::cout << "Could not find opcode in case 0x0000\n";
 			PRINT_OPCODE(opcode);
-			break;
+			exit(3);
 		}
 		break;
 
@@ -105,20 +113,24 @@ void Chip8::Cycle()
 		break;
 
 	case 0x2000:
+		// the current pc is stored in stack[i] while the new pc uses stack[i+1]
 		stack[sp] = pc;
 		sp++;
 		pc = NNN;
 		break;
 
 	case 0x3000:
+		// skip the next instruction (pc += 4) if V[X] == NN else increment normally by 2
 		pc += (V[X] == NN ? 4 : 2);
 		break;
 
 	case 0x4000:
+		// skip the next instruction (pc += 4) if V[X] != NN else increment normally by 2
 		pc += (V[X] != NN ? 4 : 2);
 		break;
 
 	case 0x5000:
+		// skip the next instruction (pc += 4) if V[X] == V[Y] else increment normally by 2
 		pc += (V[X] == V[Y] ? 4 : 2);
 		break;
 
@@ -191,7 +203,7 @@ void Chip8::Cycle()
 		default:
 			std::cout << "Could not find opcode in case 0x8000\n";
 			PRINT_OPCODE(opcode);
-			break;
+			exit(3);
 		}
 		break;
 
@@ -200,7 +212,7 @@ void Chip8::Cycle()
 		break;
 
 	case 0xA000:
-		registerI = NNN;
+		index_reg = NNN;
 		pc += 2;
 		break;
 
@@ -210,7 +222,7 @@ void Chip8::Cycle()
 
 	case 0xC000:
 	{
-		// creates a random number between 0 and 255
+		// creates a random number between 0 and 255 using the random library
 		std::random_device rd;
 		std::mt19937 generator(rd());
 		std::uniform_int_distribution<int> dist(0, 255);
@@ -218,47 +230,47 @@ void Chip8::Cycle()
 		V[X] = dist(generator) & NN;
 		pc += 2;
 	}
-		break;
+	break;
 
 	case 0xD000:
 	{
 		int xCoord = V[X];
 		int yCoord = V[Y];
-		int height = N;
+		uint16_t height = N;
 
 		V[0xF] = 0;
 		for (size_t row = 0; row < height; row++)
 		{
-			int pixel = memory[registerI + row];
+			int pixel = memory[index_reg + row];
 			for (size_t col = 0; col < 8; col++)
 			{
-				if ((pixel & (0x80 >> col)) != 0) 
+				if ((pixel & (0x80 >> col)) != 0)
 				{
-					if (display[(xCoord + col) + (yCoord + row * 64)] == 1) { V[0xF] = 1; }
-					display[(xCoord + col) + (yCoord + row * 64)] ^= 1;
+					if (display[(xCoord + col) + ((yCoord + row) * WIDTH)] == 1) { V[0xF] = 1; }
+					display[(xCoord + col) + ((yCoord + row) * WIDTH)] ^= 1;
 				}
 			}
 		}
 	}
-		drawFlag = true;
-		pc += 2;
-		break;
+	draw_flag = true;
+	pc += 2;
+	break;
 
 	case 0xE000:
-		switch (NN)
+		switch (Y)
 		{
-		case 0x0090:
+		case 0x0009:
 			pc += (keypad[V[X]] == Key::Pressed) ? 4 : 2;
 			break;
 
-		case 0x00A0:
+		case 0x000A:
 			pc += (keypad[V[X]] == Key::NotPressed) ? 4 : 2;
 			break;
 
 		default:
 			std::cout << "Could not find opcode in case 0xE000\n";
 			PRINT_OPCODE(opcode);
-			break;
+			exit(3);
 		}
 		break;
 
@@ -266,43 +278,44 @@ void Chip8::Cycle()
 		switch (NN)
 		{
 		case 0x0007:
-			V[X] = delayTimer;
+			V[X] = delay_timer;
 			pc += 2;
 			break;
 
 		case 0x000A:
 		{
-			// loop until it finds a key press then increase the pc
-			while (true) {
-				auto it = std::find(keypad.begin(), keypad.end(), Key::Pressed);
-				if (it != keypad.end())
-				{
-					V[X] = it - keypad.begin();		 // stores the index position in VX
-					break;
-				}
+			// find the enum in the keypad array. if not detected it will point to keypad.end()
+			auto it = std::find(keypad.begin(), keypad.end(), Key::Pressed);
+			if (it != keypad.end())
+			{
+				// stores the index position in VX
+				V[X] = std::distance(keypad.begin(), it);
 			}
-			pc += 2;
+			// return if there was no keypress and do not increment pc
+			// imitates a loop running the same opcode until a keypress is detected
+			else { return; }
 		}
-			break;
+		pc += 2;
+		break;
 
 		case 0x0015:
-			delayTimer = V[X];
+			delay_timer = V[X];
 			pc += 2;
 			break;
 
 		case 0x0018:
-			soundTimer = V[X];
+			sound_timer = V[X];
 			pc += 2;
 			break;
 
 		case 0x001E:
-			registerI += V[X];
+			index_reg += V[X];
 			pc += 2;
 			break;
 
 		case 0x0029:
 			// Get the char from V[X] and look for that in memory. Fontset starts at 0x000. Find the char's offset by multiplying each char's size (5) with the reg value.
-			registerI = V[X] * 5;
+			index_reg = V[X] * 5;
 			pc += 2;
 			break;
 
@@ -312,17 +325,17 @@ void Chip8::Cycle()
 			uint8_t tensCol = V[X] / 10 % 10;
 			uint8_t hundredsCol = V[X] / 100 % 10;
 
-			memory[registerI] = hundredsCol;
-			memory[registerI + 1] = tensCol;
-			memory[registerI + 2] = onesCol;
+			memory[index_reg] = hundredsCol;
+			memory[index_reg + 1] = tensCol;
+			memory[index_reg + 2] = onesCol;
 		}
-			pc += 2;
-			break;
+		pc += 2;
+		break;
 
 		case 0x0055:
 			for (int i = 0; i <= X; i++)
 			{
-				memory[registerI + i] = V[i];
+				memory[index_reg + i] = V[i];
 			}
 			pc += 2;
 			break;
@@ -330,7 +343,7 @@ void Chip8::Cycle()
 		case 0x0065:
 			for (int i = 0; i <= X; i++)
 			{
-				V[i] = memory[registerI + i];
+				V[i] = memory[index_reg + i];
 			}
 			pc += 2;
 			break;
@@ -338,12 +351,15 @@ void Chip8::Cycle()
 		default:
 			std::cout << "Could not find opcode in case 0xF000\n";
 			PRINT_OPCODE(opcode);
-			break;
+			exit(3);
 		}
 		break;
 
 	default:
 		std::cout << "Unknown opcode\n";
 		PRINT_OPCODE(opcode);
+		exit(3);
 	}
+	if (delay_timer > 0) delay_timer--;
+	if (sound_timer > 0) sound_timer--;
 }

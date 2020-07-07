@@ -1,6 +1,7 @@
 # Folders
 [Bb]uild/
 .vs/
+external/
 
 # Prerequisites
 *.d
