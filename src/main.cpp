@@ -22,7 +22,7 @@ int main(int argc, char** argv) {
 	auto displaymanager = std::make_unique<DisplayManager>();
 
 	// exit program if the rom was not loaded
-	if (!c8->load_rom(argv[1])) 
+	if (!c8->load_rom(argv[1]))
 	{
 		std::cout << "Could not load the ROM. Exiting program";
 		return -1;
