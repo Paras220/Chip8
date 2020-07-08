@@ -1,5 +1,5 @@
 # CHIP-8 Emulator
-Select a ROM from the ROMs folder and pass it as a command line argument to load it.
+Select a ROM from the ROMs folder and pass it as a command line argument to load it. Compile with Visual Studio to run. Requires C++17.
 
 | PONG |
 |:--:|
